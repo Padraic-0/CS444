@@ -9,4 +9,9 @@
 
 #define SPEC_SIZE 6
 
+#define INODE_SIZE 64
+#define INODE_FIRST_BLOCK 3
+
+#define INODES_PER_BLOCK (BLOCK_SIZE / INODE_SIZE)
+
 #endif

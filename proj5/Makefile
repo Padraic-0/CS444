@@ -14,10 +14,13 @@ inode.o: inode.c
 mkfs.o: mkfs.c
 	gcc -Wall -Wextra -c $<
 
+pack.o: pack.c
+	gcc -Wall -Wextra -c $<
+
 mylib.a: block.o free.o image.o inode.o mkfs.o
 	ar rcs $@ $^
 
-testlib.a: image.o free.o mkfs.o block.o inode.o
+testlib.a: image.o free.o mkfs.o block.o inode.o pack.o
 	ar rcs $@ $^
 
 simfs_test: simfs_test.c testlib.a
