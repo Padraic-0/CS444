@@ -16,6 +16,20 @@ struct inode {
     unsigned int inode_num;
 };
 
+struct directory {
+    struct inode *inode;
+    unsigned int offset;
+};
+
+struct directory_entry {
+    unsigned int inode_num;
+    char name[16];
+};
+
+void directory_close(struct directory *dir);
+struct directory *directory_open(int inode_num);
+int directory_get(struct directory *dir, struct directory_entry *ent);
+
 struct inode *ialloc(void);
 void print_inode_map(void);
 struct inode *find_incore_free(void);

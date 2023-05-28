@@ -7,12 +7,250 @@
 #include "block.h"
 #include "macros.h"
 #include "pack.h"
+#include "ls.h"
+#include "string.h"
 #ifdef CTEST_ENABLE
 
 int image_fd;
 
+void test_image_open(void){
+    image_fd = image_open("test.bin",0);
+    CTEST_ASSERT(image_fd != -1, "image open");
+
+    image_fd = image_open("test.bin",1);
+    CTEST_ASSERT(image_fd != -1, "image truncate");
+}
+
+void test_image_close(void){
+    CTEST_ASSERT(image_close() != -1, "Image closed");
+}
+
+void test_bread_bwrite(void){
+    image_open("test.bin",1);
+
+    unsigned char block[BLOCK_SIZE] = {0};
+    block[0] = 1;
+    block[2] = 2;
+    bwrite(0,block);
+
+    unsigned char read[BLOCK_SIZE] = {0};
+    bread(0,read);
+
+    CTEST_ASSERT(memcmp(block, read, BLOCK_SIZE) == 0, "Written block is read");
+    image_close();
+}
+
+void test_set_free(void){
+    image_open("test.bin",1);
+
+    unsigned char block[BLOCK_SIZE] = {0};
+
+    set_free(block, 0, 1);
+
+    CTEST_ASSERT(((block[0] >> 0) & 1) == 1, "Bit set to 1");
+
+    set_free(block, 0, 0);
+    CTEST_ASSERT(((block[0] >> 0) & 1) == 0, "Bit set to 0");
+
+    image_close();
+}
+
+void test_find_free(void){
+    image_open("test.bin",1);
+
+    unsigned char block[BLOCK_SIZE] = {0};
+
+    set_free(block, 0, 1);
+    CTEST_ASSERT(find_free(block) == 1, "Next free bit returned");
+
+    set_free(block, 0, 0);
+    CTEST_ASSERT(find_free(block) == 0, "First free bit returned");
+
+    image_close();
+}
+
+void test_ialloc(){
+    image_open("test.bin",1);
+
+    struct inode *temp = ialloc();
+    CTEST_ASSERT(temp->inode_num == 0, "Allocates first inode");
+
+    temp = ialloc();
+    CTEST_ASSERT(temp->inode_num == 1, "Allocates first inode");
+
+
+    unsigned char fill_inode_map[BLOCK_SIZE] = {0};
+    memset(fill_inode_map, 255, BLOCK_SIZE);
+    bwrite(INODE_MAP, fill_inode_map);
+    CTEST_ASSERT(ialloc() == NULL, "Full inode_map returns NULL");
+    image_close();
+
+}
+
+void test_incore(){
+    struct inode write;
+
+    write.size = 23;
+    write.owner_id = 24;
+    write.permissions = 25;
+    write.flags = 25;
+    write.link_count = 0;
+    write.block_ptr[0] = 1;
+    write.inode_num = 5;
+
+    put_incore(&write, write.inode_num);
+
+    struct inode read = *find_incore(write.inode_num);
+    CTEST_ASSERT(read.size == write.size, "Find incore returns the correct inode");
+
+    write.ref_count = 0;
+    put_incore(&write, write.inode_num);
+    CTEST_ASSERT(find_incore(write.inode_num) == NULL, "Ref count 0 returns NULL");
+
+    struct inode zero;
+    zero.inode_num = 0;
+    zero.size = 11;
+    zero.ref_count = 0;
+    put_incore(&zero, zero.inode_num);
+
+    CTEST_ASSERT(find_incore_free()->size == 11, "First spot is open");
+
+    zero.ref_count = 1;
+    put_incore(&zero, zero.inode_num);
+
+    struct inode one;
+    one.inode_num = 1;
+    one.size = 12;
+    one.ref_count = 0;
+
+    put_incore(&one, one.inode_num);
+    CTEST_ASSERT(find_incore_free()->size == 12, "Second spot is open");
+}
+
+void test_alloc(){
+    image_open("test.bin",1);
+    
+    int allocation_index = alloc();
+    unsigned char block[BLOCK_SIZE] = {0};
+    bread(FREE_BLOCK_MAP,block);
+
+    int byte_num = allocation_index / 8;  // 8 bits per byte
+    int bit_num = allocation_index % 8;
+
+    CTEST_ASSERT(((block[byte_num] >> bit_num) & 1) == 1, "Bit set to 1");
+
+    memset(block, 255, BLOCK_SIZE);
+    bwrite(FREE_BLOCK_MAP, block);
+    CTEST_ASSERT(alloc() == -1, "Full block map returns -1");
+
+
+    image_close();
+}
+
+void test_read_write_inode(){
+    image_open("test.bin",1);
+    
+    struct inode write;
+
+    write.size = 23;
+    write.owner_id = 24;
+    write.permissions = 25;
+    write.flags = 25;
+    write.link_count = 0;
+    write.block_ptr[0] = 1;
+    write.inode_num = 5;
+    
+    write_inode(&write);
+    
+    struct inode read;
+    read_inode(&read, write.inode_num);
+    
+    CTEST_ASSERT(read.size == write.size, "Read inode is same size as written");
+    CTEST_ASSERT(read.owner_id == write.owner_id, "Read inode onwer is same and written");
+    CTEST_ASSERT(read.block_ptr[0] == write.block_ptr[0], "Last field is correct");
+
+    image_close();
+}
+
+void test_iget_iput(){
+    image_open("test.bin",1);
+
+    struct inode write;
+
+    write.size = 23;
+    write.owner_id = 24;
+    write.permissions = 25;
+    write.flags = 25;
+    write.link_count = 0;
+    write.block_ptr[0] = 1;
+    write.inode_num = 5;
+    write.ref_count = 1;
+
+    iput(&write);
+
+    struct inode get = *iget(write.inode_num);
+    CTEST_ASSERT(get.size == write.size, "iput and iget work together");
+
+    write.inode_num = 34;
+    write_inode(&write);
+
+    get = *iget(34);
+    CTEST_ASSERT(get.ref_count == 1, "find_incore returns NULL so new incore inode is populated from storage");
+    CTEST_ASSERT(get.size == 23, "In storage inode is read out and put incore");
+
+
+    image_close();
+}
+
+void test_mkfs(){
+    image_open("test.bin",1);
+    mkfs();
+
+    unsigned char block[BLOCK_SIZE] = {0};
+    bread(FREE_BLOCK_MAP, block);
+    CTEST_ASSERT(block[0] == 0b11111111, "SPEC size is allocated plus root directory");
+    CTEST_ASSERT(block[1] == 0b00000000, "Next byte has no allocation");
+
+    ls();
+
+    image_close();
+}
+
+
+
 int main(void){
     CTEST_VERBOSE(1);
+
+    test_image_open();
+    test_image_close();
+    test_set_free();
+    test_bread_bwrite();
+    test_find_free();
+    test_ialloc();
+    test_incore();
+    test_alloc();
+    test_read_write_inode();
+    test_iget_iput();
+    test_mkfs();
+    /*
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     unsigned char wipe_file[BLOCK_SIZE] = {0};
 
     CTEST_ASSERT(image_open("test.bin",0) != -1, "testing file is opened");
@@ -73,22 +311,6 @@ int main(void){
     bread(INODE_MAP,inode_block);
     CTEST_ASSERT((((inode_block[0]) >> 0) & 1) == 1, "inode map is filled");
     bwrite(INODE_MAP,wipe_file);
-    
-
-    struct inode test;
-    test.ref_count = 0;
-    test.inode_num = 1;
-    put_incore(&test, 0);
-    CTEST_ASSERT(find_incore(1) == NULL, "ref_count 0 returns null");
-
-    struct inode test2;
-    test2.ref_count = 1;
-    test2.inode_num = 2;
-    put_incore(&test2, 1);
-    CTEST_ASSERT(find_incore(2)->inode_num == 2, "incore array holds values");
-
-    //incore[1,2] current incore arrray
-    CTEST_ASSERT(find_incore_free()->inode_num == 1 , "First inode is free because ref_Count == 0");
     image_close();
 
     image_open("test.bin",1);
@@ -99,11 +321,11 @@ int main(void){
     write.permissions = 2;
     write.flags = 3;
     write.link_count = 4;
-    write.inode_num = 0;
+    write.inode_num = 5;
     
     write_inode(&write);
     struct inode read;
-    read_inode(&read,0);
+    read_inode(&read,5);
     //print_inode(&read);
     CTEST_ASSERT(read.size == write.size, "Verify the written node is read out");
     CTEST_ASSERT(read.owner_id == write.owner_id, "Verify the written node is read out");
@@ -111,32 +333,52 @@ int main(void){
     CTEST_ASSERT(read.flags == write.flags, "Verify the written node is read out");
     CTEST_ASSERT(read.link_count == write.link_count, "Verify the written node is read out");
 
-    CTEST_ASSERT(find_incore(0) == NULL, "Inode is in file but not incore");
+    CTEST_ASSERT(find_incore(5) == NULL, "Inode is in file but not incore");
     CTEST_ASSERT(read.ref_count == 0, "The in file inode 'read' has refcount 0");
-    CTEST_ASSERT(iget(0)->ref_count == 1, "iget goes down find_incore == NULL path and sets ref_count = 1");
-    CTEST_ASSERT(iget(0)->ref_count == 2, "iget goes down find_incore != NULL path and sets ref_count ++");
+    CTEST_ASSERT(iget(5)->ref_count == 1, "iget goes down find_incore == NULL path and sets ref_count = 1");
+    CTEST_ASSERT(iget(5)->ref_count == 2, "iget goes down find_incore != NULL path and sets ref_count ++");
 
     struct inode inode_0 = *iget(0); //inode 0 will now how ref count of 3
     inode_0.flags = 25; //modifiy the incore inode value
     read_inode(&read,0); //Get the in file inode 0
-    CTEST_ASSERT(read.flags != inode_0.flags && read.size == inode_0.size, "The same inode but the updated flags are not seen on the infile inode");
+    CTEST_ASSERT(read.flags != inode_0.flags && read.size == inode_0.size, "updated flags not on the infile inode");
     find_incore(0)->ref_count = 0; //set ref_count to 0 for iput to update
     inode_0.ref_count = 0;
     iput(&inode_0);
     read_inode(&read,0); //Get the in file inode 0
-    CTEST_ASSERT(read.flags == inode_0.flags && read.size == inode_0.size, "The same inode but the updated flags are not seen on the infile inode");
+    CTEST_ASSERT(read.flags == inode_0.flags && read.size == inode_0.size, "updated flags on the infile inode");
     image_close();
 
     image_open("test.bin",1);
     mkfs();
     struct inode *inode_zero = ialloc();
-    CTEST_ASSERT(inode_zero->inode_num == 0, "ialloc sets allocated inode number to the first free inode");
+    CTEST_ASSERT(inode_zero->inode_num == 1, "ialloc accounts of root dir");
     unsigned char inode_map[BLOCK_SIZE] = {0};
     bread(INODE_MAP,inode_map);
-    CTEST_ASSERT(find_free(inode_map) == 1, "ialloc has set first inode bit to inuse");
+    CTEST_ASSERT(find_free(inode_map) == 2, "find free sees first 2 blocks");
+
+
+    struct inode* root = iget(0);
+    unsigned char root_block[BLOCK_SIZE] = {0};
+    bread(root->block_ptr[0], root_block);
+    printf("%d", root->block_ptr[0]);
+    CTEST_ASSERT(root->block_ptr[0] == 6, "root directory has the 7th block");
+
+    struct inode* incore_print;
+    for (int i = 0; i < 10; i++){
+        incore_print = find_incore(i);
+        if (incore_print != NULL){
+            print_inode(incore_print);
+            printf("\n");
+        }
+    }
     
     image_close();
 
+    image_open("test.bin",1);
+    mkfs();
+    ls();
+    */
     CTEST_RESULTS();
     CTEST_EXIT();
 

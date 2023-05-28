@@ -8,6 +8,7 @@
 #include "block.h"
 #include "macros.h"
 #include "pack.h"
+#include "string.h"
 
 static struct inode incore[MAX_SYS_OPEN_FILES] = {0};
 int next_free = 0;
@@ -92,7 +93,8 @@ void write_inode(struct inode *in){
     write_u8(temp + block_offset_bytes+8,in->link_count);
     int nine = 9;
     for (int i = 0; i < INODE_PTR_COUNT; i++){
-        write_u16(temp + block_offset_bytes+nine+(2*i),in->block_ptr[i]);
+        if (in->block_ptr[i] != NULL)
+            write_u16(temp + block_offset_bytes+nine+(2*i),in->block_ptr[i]);
     }
     bwrite(block_num,temp);
     
@@ -117,6 +119,7 @@ void print_inode(struct inode *in) {
     printf("Flags: %d\n", in->flags);
     printf("Link Count: %d\n", in->link_count);
     printf("Ref Count: %d\n", in->ref_count);
+    printf("inode num: %d\n", in->inode_num);
 }
 
 struct inode *iget(int inode_num){
@@ -126,26 +129,54 @@ struct inode *iget(int inode_num){
         temp->ref_count ++;
         return temp;
     }else{
-       temp = find_incore_free();
-       if(temp == NULL){
-        return NULL;
-       }
-       read_inode(temp,inode_num);
-       temp->ref_count = 1;
-       temp->inode_num = inode_num;
-       return temp;
+        temp = find_incore_free();
+        if(temp == NULL){
+            return NULL;
+        }
+        read_inode(temp,inode_num);
+        temp->ref_count = 1;
+        temp->inode_num = inode_num;
+        return temp;
     }
 }
 
 void iput(struct inode *in){
+    in->ref_count --;
     if (in->ref_count == 0){
         write_inode(in);
-    }else{
-        in->ref_count --;
-    }
-    
+    } 
 }
 
+struct directory *directory_open(int inode_num){
+    struct inode *dir_inode = iget(inode_num);
+    if (dir_inode == NULL){
+        return NULL;
+    }
+    struct directory *dir = malloc(sizeof(struct directory));
+    dir->inode = dir_inode;
+    dir->offset = 0;
+    return dir;
+}
+
+int directory_get(struct directory *dir, struct directory_entry *ent){
+    if(dir->offset >= dir->inode->size){
+        return -1;
+    }
+    int data_block_index = dir->offset / BLOCK_SIZE;
+    int data_block_num = dir->inode->block_ptr[data_block_index];
+    unsigned char block[BLOCK_SIZE] = {0};
+    bread(data_block_num, block);
+    int offset_in_block = dir->offset % BLOCK_SIZE;
+    ent->inode_num = read_u16(block + offset_in_block);
+    strcpy(ent->name, (char *)(block + offset_in_block + sizeof(unsigned short)));
+    dir->offset += DIRECTORY_SIZE;
+    return 1;
+}
+
+void directory_close(struct directory *dir){
+    iput(dir->inode);
+    free(dir);
+}
 /*
 int block_num = inode_num / INODES_PER_BLOCK + INODE_FIRST_BLOCK;
 int block_offset = inode_num % INODES_PER_BLOCK;

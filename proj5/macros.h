@@ -7,11 +7,13 @@
 #define BLOCK_SIZE 4096
 #define NUM_BLOCK 1024
 
-#define SPEC_SIZE 6
+#define SPEC_SIZE 7
 
 #define INODE_SIZE 64
 #define INODE_FIRST_BLOCK 3
 
 #define INODES_PER_BLOCK (BLOCK_SIZE / INODE_SIZE)
+
+#define DIRECTORY_SIZE 32
 
 #endif
