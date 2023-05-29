@@ -169,6 +169,8 @@ void test_read_write_inode(){
     CTEST_ASSERT(read.owner_id == write.owner_id, "Read inode onwer is same and written");
     CTEST_ASSERT(read.block_ptr[0] == write.block_ptr[0], "Last field is correct");
 
+    struct inode write2
+
     image_close();
 }
 

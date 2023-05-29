@@ -19,5 +19,6 @@ void ls(void){
     while (directory_get(dir, &ent) != -1){
         printf("%d %s\n", ent.inode_num, ent.name);
     }
+    
     directory_close(dir);
 }

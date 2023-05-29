@@ -12,6 +12,7 @@
 
 void write_dir(int index, unsigned char *block, int inode_num, char* file_name){
     int index_offset = index * DIRECTORY_SIZE;
+
     write_u16(block + index_offset, inode_num );
     strcpy((char *)(block + index_offset + sizeof(unsigned short)), file_name);
 }
@@ -19,6 +20,7 @@ void write_dir(int index, unsigned char *block, int inode_num, char* file_name){
 void mkfs(void){
     unsigned char buffer[BLOCK_SIZE*NUM_BLOCK] = {0};
     write(image_fd, buffer, BLOCK_SIZE*NUM_BLOCK);
+    
     for(int i = 0; i < SPEC_SIZE; i++){
         if (alloc() == -1){
             perror("Failed to alloc spec");

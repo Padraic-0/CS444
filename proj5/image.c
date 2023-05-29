@@ -16,10 +16,8 @@ int image_open(char *filename, int truncate){
         return image_fd;
     }
     return -1;
-    
 }
 
 int image_close(void){
     return close(image_fd);
-    
 }

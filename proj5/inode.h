@@ -31,16 +31,20 @@ struct directory *directory_open(int inode_num);
 int directory_get(struct directory *dir, struct directory_entry *ent);
 
 struct inode *ialloc(void);
-void print_inode_map(void);
+
 struct inode *find_incore_free(void);
 struct inode *find_incore(unsigned int inode_num);
-void put_incore(struct inode* inode, int index);
 
 void read_inode(struct inode *in, int inode_num);
 void write_inode(struct inode *in);
-int get_block_offset_bytes(int inode_num);
-void print_inode(struct inode *in);
 
 struct inode *iget(int inode_num);
 void iput(struct inode *in);
+
+//test helpers
+void print_inode_map(void);
+void put_incore(struct inode* inode, int index);
+void print_inode(struct inode *in);
+int get_block_offset_bytes(int inode_num);
+
 #endif
