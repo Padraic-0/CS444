@@ -169,7 +169,19 @@ void test_read_write_inode(){
     CTEST_ASSERT(read.owner_id == write.owner_id, "Read inode onwer is same and written");
     CTEST_ASSERT(read.block_ptr[0] == write.block_ptr[0], "Last field is correct");
 
-    struct inode write2
+    struct inode write2;
+    write2.inode_num = 45;
+    for (int i = 0; i < INODE_PTR_COUNT; i++){
+        write2.block_ptr[i] = i;
+    }
+    write_inode(&write2);
+    
+    struct inode read2;
+    read_inode(&read2, write2.inode_num);
+
+    for (int i = 0; i < INODE_PTR_COUNT; i++){
+        CTEST_ASSERT(read2.block_ptr[i] == write2.block_ptr[i], "Block ptrs are rw correctly");
+    }
 
     image_close();
 }
@@ -213,9 +225,15 @@ void test_mkfs(){
     CTEST_ASSERT(block[0] == 0b11111111, "SPEC size is allocated plus root directory");
     CTEST_ASSERT(block[1] == 0b00000000, "Next byte has no allocation");
 
-    ls();
-
     image_close();
+}
+
+void test_ls(){
+    image_open("test.bin",1);
+    mkfs();
+
+    ls();
+    printf("Does above match:\n------------\n0 .\n0 ..\n------------");
 }
 
 
@@ -234,6 +252,7 @@ int main(void){
     test_read_write_inode();
     test_iget_iput();
     test_mkfs();
+    test_ls();
     /*
 
 
