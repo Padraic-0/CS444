@@ -24,6 +24,8 @@ struct inode *ialloc(void){
         struct inode *temp = iget(free_inode);
 
         if (temp == NULL){
+            set_free(inode_map,free_inode,0);
+            bwrite(INODE_MAP, inode_map);
             return NULL;
         }
 
@@ -187,7 +189,7 @@ int directory_get(struct directory *dir, struct directory_entry *ent){
     ent->inode_num = read_u16(block + offset_in_block);
     strcpy(ent->name, (char *)(block + offset_in_block + sizeof(unsigned short)));
     dir->offset += DIRECTORY_SIZE;
-    
+
     return 1;
 }
 
