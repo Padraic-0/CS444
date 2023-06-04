@@ -16,4 +16,6 @@
 
 #define DIRECTORY_SIZE 32
 
+#define ROOT_INODE_NUM 0
+
 #endif

@@ -8,6 +8,8 @@
 #include "block.h"
 #include "macros.h"
 #include "pack.h"
+#include "dirbasename.h"
+#include "mkfs.h"
 #include "string.h"
 
 static struct inode incore[MAX_SYS_OPEN_FILES] = {0};
@@ -175,7 +177,7 @@ struct directory *directory_open(int inode_num){
 }
 
 int directory_get(struct directory *dir, struct directory_entry *ent){
-    if(dir->offset >= dir->inode->size){
+    if (dir->offset >= dir->inode->size){
         return -1;
     }
 
@@ -196,6 +198,65 @@ int directory_get(struct directory *dir, struct directory_entry *ent){
 void directory_close(struct directory *dir){
     iput(dir->inode);
     free(dir);
+}
+
+struct inode *namei(char *path){
+    // later.. split_path = path.split("/");
+    if (strcmp("/",path) == 0){
+        return iget(ROOT_INODE_NUM);
+    }else{
+        return NULL;
+    }
+}
+
+int directory_make(char *path){
+    char path_path[1024];
+    get_dirname(path,path_path);
+    
+    char path_new[1024];
+    get_basename(path,path_new);
+
+    struct inode *parent_inode = namei(path_path);
+    if (parent_inode == NULL){
+        return -1;
+    }
+
+    struct inode *new_dir = ialloc();
+    
+    
+    int dir_block_num = alloc();
+
+    unsigned char block[BLOCK_SIZE] = {0};
+    write_dir(0,block, new_dir->inode_num, ".");
+    write_dir(1,block, parent_inode->inode_num, "..");
+
+    bwrite(dir_block_num,block);
+
+    new_dir->size = 64;
+    new_dir->link_count = 1;
+    new_dir->flags = 2;
+    new_dir->block_ptr[0] = dir_block_num;
+
+    unsigned char parent_block[BLOCK_SIZE] = {0};
+    int index = parent_inode->size / BLOCK_SIZE;
+    bread(parent_inode->block_ptr[index], parent_block);
+
+    int index_offset = parent_inode->size;
+    write_u16(parent_block + index_offset, new_dir->inode_num );
+    strcpy((char *)(parent_block + index_offset + sizeof(unsigned short)), path_new);
+
+    parent_inode->size += DIRECTORY_SIZE;
+
+    bwrite(parent_inode->block_ptr[index], parent_block);
+
+    iput(new_dir);
+    iput(parent_inode);
+
+
+
+
+    return 1;
+
 }
 /*
 int block_num = inode_num / INODES_PER_BLOCK + INODE_FIRST_BLOCK;

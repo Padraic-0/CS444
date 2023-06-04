@@ -41,6 +41,9 @@ void write_inode(struct inode *in);
 struct inode *iget(int inode_num);
 void iput(struct inode *in);
 
+struct inode *namei(char *path);
+int directory_make(char *path);
+
 //test helpers
 void print_inode_map(void);
 void put_incore(struct inode* inode, int index);

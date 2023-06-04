@@ -233,9 +233,68 @@ void test_ls(){
     mkfs();
 
     ls();
-    printf("Does above match:\n------------\n0 .\n0 ..\n------------");
+    printf("Does above match:\n------------\n0 .\n0 ..\n------------\n");
+
+    image_close();
 }
 
+void test_directory(){
+    image_open("test.bin",1);
+    mkfs();
+
+    struct directory *test = directory_open(ROOT_INODE_NUM);
+    struct inode *for_later = test->inode;
+
+    CTEST_ASSERT(test->inode->inode_num == ROOT_INODE_NUM, "Directory opens correct inode");
+
+    struct directory_entry ent;
+    directory_get(test,&ent);
+
+    CTEST_ASSERT(strcmp(ent.name,".") == 0, "Parent Directory is got");
+
+    directory_get(test,&ent);
+    CTEST_ASSERT(strcmp(ent.name,"..") == 0, "Current Directory is got");
+
+    CTEST_ASSERT(directory_get(test,&ent) == -1, "No more directories");
+
+    directory_close(test);
+    
+    CTEST_ASSERT(for_later->ref_count == 1, "Not sure if correct"); //mkfs made the 0 inode with ialloc setting ref_count to 1, then open directory called iget so now ref count is 2, dir_close then decreases refcount
+
+    image_close();
+}
+
+void test_directory_make(){
+    image_open("test.bin",1);
+    mkfs();
+
+    directory_make("/foo");
+    ls();
+    printf("Does above match:\n------------\n0 .\n0 ..\n1 foo\n------------\n");
+
+    struct directory *test = directory_open(ROOT_INODE_NUM);
+    struct directory_entry ent;
+    directory_get(test,&ent);
+    directory_get(test,&ent);
+    directory_get(test,&ent);
+
+    CTEST_ASSERT(strcmp(ent.name, "foo") == 0, "Directory sucessfully created");
+
+    directory_close(test);
+
+    image_close();
+}
+
+void test_namei(){
+    image_open("test.bin",1);
+    mkfs();
+
+    CTEST_ASSERT(namei("/")->inode_num == ROOT_INODE_NUM, "Namei returns the root inode as of now");
+
+    CTEST_ASSERT(namei("nothing") == NULL, "Namei returns NULL if not the root path");
+
+    image_close();
+}
 
 
 int main(void){
@@ -253,6 +312,9 @@ int main(void){
     test_iget_iput();
     test_mkfs();
     test_ls();
+    test_directory();
+    test_directory_make();
+    test_namei();
     /*
 
 
