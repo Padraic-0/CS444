@@ -241,7 +241,7 @@ int directory_make(char *path){
     int index = parent_inode->size / BLOCK_SIZE;
     bread(parent_inode->block_ptr[index], parent_block);
 
-    int index_offset = parent_inode->size;
+    int index_offset = parent_inode->size % BLOCK_SIZE;
     write_u16(parent_block + index_offset, new_dir->inode_num );
     strcpy((char *)(parent_block + index_offset + sizeof(unsigned short)), path_new);
 
