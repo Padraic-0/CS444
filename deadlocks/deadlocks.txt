@@ -1,0 +1,118 @@
+//RACE CONDITONS
+//1
+if x == 12:
+    x++;
+
+One thread will get to x++ and pause, thread two will compare x to 12 and x might be 11 so it passes and then pauses. Thread one
+will increment x to 12 and return, then thread two will increment again and x will be 13. This if statement wants x to be at max 12
+after running, so x == 13 may break the program, or be unwanted. To FIX this, lock down before and after the comparison so that x
+is compared and modified all in one.
+//
+
+//2
+if x == 12:
+    lock(m1)
+    x++;
+    unlock(m1)
+Again thread one may pause after getting past the comparison and before it locks the x++. Thread two will also get past the comparison,
+and could then enter the critical section, incrementing x. Thread one then gets to go into the critical section and increment x, with x being
+13 for example. To FIX this move lock(m1) before the comparison so that x is protected the entire time.
+//
+
+//3
+if y not in hash:
+    hash[y] = 12
+else
+    hash[y]++
+A race condition occurs when one thread finds that y is not in the hash table and pauses before assigning hash[y] = 12. The next
+thread then runs and also sees y is not in the hash and completes the hash[y] = 12 assignment. Thread one then reassigns hash[y] = 12. This is a 
+problem because hash[y] was supposed to be set to 12 and then incremented by 1 to be hash[y] = 13 after two synchronized runs. To FIX
+this lock before and after this entire code segment. This will prevent the hash table being read/write out of order.  
+//
+
+//4
+x += 12;
+
++= is not thread safe. If x is moved into a register on one thread and then pauses for thread 2 to then increment x by 12, when thread
+one gets to run again the register still holds the orignal value of x and increments it by 12. So after these two threads run x has only
+been incremented by 12 not 24. To FIX this lock this code with a mutex. 
+
+//
+
+//5
+x = 0
+
+semaphore_init(value):
+    x = value
+
+semaphore_signal():
+    x++;
+
+semaphore_wait():
+    while x == 0:
+        do nothing  # spinlock
+
+    x--
+
+The problem with this semaphore defenitions is that wait only passes if x is set to 0 outside of the of the function. So if all of threads
+call wait with x starting as 0 then they all will spin forever. x needs to be init to 1 atleast so that one thread can get passed the wait, set x to 0,
+locking the semaphore until it signals it. To FIX this init x to 1 or more.
+//
+
+//DEAD LOCKS
+
+//1
+function1():
+    lock(m1)
+    lock(m2)
+
+    unlock(m2)
+    unlock(m1)
+
+function2():
+    lock(m2)
+    lock(m1)
+
+    unlock(m1)
+    unlock(m2)
+
+This will enter a dead lock one thread calls function1 and another thread calls function2. If both threads pause after locking their first lock,
+then m2 is locked for function1 and m1 is locked for function2. So both threads are stuck waiting for the last lock to become avaliable. To FIX
+this lock the locks in the same locking order, for example lock m1 then m2 so that the second lock is protected from being locked unless the first lock
+is held.
+//
+
+//2
+function1():
+    lock(m1)
+    lock(m2)
+
+    unlock(m2)
+    unlock(m1)
+
+function2():
+    lock(m1)
+    lock(m2)
+   
+    unlock(m1)
+    lock(m1)
+
+    unlock(m2)
+    unlock(m1)
+
+With function2 unlocking m1 in the middle, function1 could then lock m1 before function2 locks m1 again. This will cause m1 to be locked twice which is a problem.
+With the current emplentation, function1 still wouldnt be able to run because m2 is locked. To FIX this two paths need to be avaible after unlocking
+m1 in the middle of function2. If lock(m1) returns fine then continue as is, if lock(m1) fails because function1 then locks it, then function2 shouldn't unlock it again.
+
+//
+
+//3
+function1(m1, m2):  # Mutexes are passed in by caller
+    lock(m1)
+    lock(m2)
+
+    unlock(m2)
+    unlock(m1)
+//
+
+By being passed in and not global I think the locks will not have an effect on other threads. The locks need to be global so that every thread shares the locks state.
